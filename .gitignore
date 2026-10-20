@@ -1,0 +1,4 @@
+work/
+*.img
+*.tar
+ArchLinuxARM-*.tar.gz
