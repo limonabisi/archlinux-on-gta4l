@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Tablet setup
+Comment=Set up the user, password, time zone and language
+Exec=/usr/local/bin/gta4l-setup --first-boot
+Icon=preferences-system
+Terminal=false
+X-KDE-autostart-phase=2

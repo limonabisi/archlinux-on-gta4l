@@ -27,17 +27,20 @@ Volume Up to unlock.
    tablet's own partitions, the root filesystem grows to fill `userdata`
    and pacman gets its keyring.
 
-Log in as **`alarm`**, password **`1234`**. Change it right away:
+Log in as **`alarm`**, password **`1234`**. The **tablet setup** opens by
+itself (the on-screen keyboard works in it) and asks for:
 
-```sh
-passwd
-```
+- your user name and full name (a new name replaces `alarm`, which is
+  removed on the next boot),
+- your password, which is also your `sudo` password,
+- the tablet's name, the time zone, the language and the keyboard layout,
+- whether SSH should be on.
 
-`root` is locked; use `sudo`. SSH is off; after changing the password:
+"Apply and restart" makes the changes and restarts the tablet. "Later" closes
+it until the next login; run it again any time with `gta4l-setup` or from the
+application menu ("Tablet setup").
 
-```sh
-sudo systemctl enable --now sshd
-```
+`root` is locked; use `sudo`. SSH stays off unless you turn it on in the setup.
 
 Over the USB cable the tablet is `alarm@172.16.42.1`.
 
@@ -61,6 +64,7 @@ Back to Android: flash Samsung's stock firmware with Odin.
 - `gta4l-ayarlar.sh`: system settings, used by the build and by `gta4l-duzelt.sh`.
 - `gta4l-duzelt.sh`: brings an image made with an older version up to date.
 - `gta4l-tani.sh`: collects a debug report.
+- `firstboot/`: the tablet setup shown on the first login.
 - `tools/gta4l-overlay.py`: how `gta4l-parts.tar.gz` is made from a working
   postmarketOS rootfs (musl programs moved aside and wrapped).
 

@@ -127,6 +127,14 @@ echo LANG=en_US.UTF-8 > $R/etc/locale.conf
 mkdir -p $R/etc/sudoers.d
 cp $HERE/gta4l-tani.sh $R/usr/local/bin/gta4l-tani
 chmod 755 $R/usr/local/bin/gta4l-tani
+# First-boot setup: user, password (the sudo password), name, time zone,
+# language, keyboard, SSH
+install -Dm755 $HERE/firstboot/gta4l-setup $R/usr/local/bin/gta4l-setup
+install -Dm755 $HERE/firstboot/gta4l-setup-apply $R/usr/local/lib/gta4l-setup/gta4l-setup-apply
+install -Dm644 $HERE/firstboot/gta4l-setup.desktop $R/etc/xdg/autostart/gta4l-setup.desktop
+mkdir -p $R/usr/share/applications
+sed 's/ --first-boot//' $HERE/firstboot/gta4l-setup.desktop > $R/usr/share/applications/gta4l-setup.desktop
+install -Dm644 $HERE/firstboot/gta4l-setup-cleanup.service $R/usr/lib/systemd/system/gta4l-setup-cleanup.service
 echo '%wheel ALL=(ALL:ALL) ALL' > $R/etc/sudoers.d/10-wheel
 chmod 440 $R/etc/sudoers.d/10-wheel
 cat > $R/root/gta4l-setup.sh <<'EOF'
@@ -142,7 +150,7 @@ pacman -Q libplasma plasma-workspace kwin sddm >/dev/null
 chpasswd < /root/pw
 passwd -l root
 # resolv.conf points to the systemd-resolved stub, so resolved must run
-systemctl enable NetworkManager systemd-resolved bluetooth sddm rmtfs tqftpserv
+systemctl enable NetworkManager systemd-resolved bluetooth sddm rmtfs tqftpserv gta4l-setup-cleanup
 systemctl enable tuned tuned-ppd 2>/dev/null || systemctl enable power-profiles-daemon 2>/dev/null || true
 for u in $(ls /usr/lib/systemd/system | grep -E '^(gta4l|hexagonrpcd)-.*\.service$'); do
 	systemctl preset $u 2>/dev/null || true

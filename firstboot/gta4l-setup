@@ -1,0 +1,214 @@
+#!/usr/bin/python3 -I
+"""First-boot setup for Arch Linux ARM on the Galaxy Tab A7 (gta4l).
+
+Asks for the user, the password (also the sudo password), the tablet's name,
+the time zone, the language, the keyboard layout and SSH, then has
+gta4l-setup-apply make the changes as root and reboots.
+
+  gta4l-setup               open the setup
+  gta4l-setup --first-boot  open it only if the setup has not been done yet
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+DONE = '/var/lib/gta4l-setup/done'
+APPLY = '/usr/local/lib/gta4l-setup/gta4l-setup-apply'
+DEFAULT_PASSWORD = '1234'
+
+LANGUAGES = [('English (US)', 'en_US.UTF-8'), ('Türkçe', 'tr_TR.UTF-8')]
+LAYOUTS = [('English (US)', 'us'), ('Turkish Q', 'tr'), ('Turkish F', 'tr(f)'),
+           ('German', 'de'), ('French', 'fr'), ('English (UK)', 'gb'),
+           ('Spanish', 'es'), ('Italian', 'it'), ('Russian', 'ru')]
+USER_RE = re.compile(r'^[a-z_][a-z0-9_-]{0,31}$')
+HOST_RE = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$')
+
+
+def time_zones():
+    zones = set()
+    try:
+        with open('/usr/share/zoneinfo/tzdata.zi') as f:
+            for line in f:
+                p = line.split()
+                if len(p) > 1 and p[0] in ('Z', 'L'):
+                    zones.add(p[1] if p[0] == 'Z' else p[2])
+    except OSError:
+        pass
+    zones = sorted(z for z in zones if '/' in z and not z.startswith(('Etc/', 'SystemV/', 'posix', 'right')))
+    return zones or ['Europe/Istanbul', 'UTC']
+
+
+def current_zone():
+    try:
+        return os.path.realpath('/etc/localtime').split('/zoneinfo/', 1)[1]
+    except (IndexError, OSError):
+        return 'Europe/Istanbul'
+
+
+if '--first-boot' in sys.argv and os.path.exists(DONE):
+    sys.exit(0)
+
+import gi  # noqa: E402
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, GLib  # noqa: E402
+
+
+class Setup(Gtk.Window):
+    def __init__(self):
+        super().__init__(title='Tablet setup')
+        self.set_default_size(900, 1100)
+        self.set_position(Gtk.WindowPosition.CENTER)
+        self.connect('destroy', Gtk.main_quit)
+
+        css = Gtk.CssProvider()
+        css.load_from_data(b'* { font-size: 15pt; } .title { font-size: 22pt; font-weight: bold; }'
+                           b' .error { color: #d32f2f; }')
+        Gtk.StyleContext.add_provider_for_screen(self.get_screen(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+        scroll = Gtk.ScrolledWindow()
+        self.add(scroll)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, margin=30)
+        scroll.add(box)
+
+        title = Gtk.Label(label='Welcome to Arch Linux on your Galaxy Tab A7', xalign=0)
+        title.get_style_context().add_class('title')
+        title.set_line_wrap(True)
+        box.pack_start(title, False, False, 0)
+        info = Gtk.Label(xalign=0, label='Set up your account and the tablet. The password you choose is also '
+                                         'your sudo password. You can run this again later with "gta4l-setup".')
+        info.set_line_wrap(True)
+        box.pack_start(info, False, False, 0)
+
+        grid = Gtk.Grid(row_spacing=12, column_spacing=16)
+        box.pack_start(grid, False, False, 8)
+        self.row = 0
+
+        def add(label, widget):
+            lab = Gtk.Label(label=label, xalign=0)
+            grid.attach(lab, 0, self.row, 1, 1)
+            widget.set_hexpand(True)
+            grid.attach(widget, 1, self.row, 1, 1)
+            self.row += 1
+            return widget
+
+        self.fullname = add('Full name', Gtk.Entry(placeholder_text='optional'))
+        self.username = add('User name', Gtk.Entry(text='alarm'))
+        self.password = add('Password', Gtk.Entry(visibility=False))
+        self.password2 = add('Password again', Gtk.Entry(visibility=False))
+        self.hostname = add('Tablet name', Gtk.Entry(text=self.read('/etc/hostname', 'gta4l')))
+
+        self.zone = add('Time zone', Gtk.ComboBoxText())
+        zones = time_zones()
+        cur = current_zone()
+        for z in zones:
+            self.zone.append(z, z.replace('_', ' '))
+        self.zone.set_active_id(cur if cur in zones else 'Europe/Istanbul')
+
+        self.lang = add('Language', Gtk.ComboBoxText())
+        for name, code in LANGUAGES:
+            self.lang.append(code, name)
+        self.lang.set_active(0)
+
+        self.layout = add('Keyboard layout', Gtk.ComboBoxText())
+        for name, code in LAYOUTS:
+            self.layout.append(code, name)
+        self.layout.set_active(0)
+
+        self.ssh = Gtk.Switch(active=False, halign=Gtk.Align.START)
+        add('SSH (remote login)', self.ssh)
+
+        self.status = Gtk.Label(xalign=0)
+        self.status.set_line_wrap(True)
+        box.pack_start(self.status, False, False, 0)
+
+        buttons = Gtk.Box(spacing=12)
+        later = Gtk.Button(label='Later')
+        later.connect('clicked', lambda *_: self.destroy())
+        self.apply_btn = Gtk.Button(label='Apply and restart')
+        self.apply_btn.get_style_context().add_class('suggested-action')
+        self.apply_btn.connect('clicked', self.on_apply)
+        buttons.pack_end(self.apply_btn, False, False, 0)
+        buttons.pack_end(later, False, False, 0)
+        box.pack_start(buttons, False, False, 8)
+
+        self.sudo_password = DEFAULT_PASSWORD
+
+    @staticmethod
+    def read(path, default):
+        try:
+            return open(path).read().strip() or default
+        except OSError:
+            return default
+
+    def error(self, text):
+        self.status.set_text(text)
+        self.status.get_style_context().add_class('error')
+
+    def ask_current_password(self):
+        d = Gtk.Dialog(title='Current password', transient_for=self, modal=True)
+        d.add_buttons('Cancel', Gtk.ResponseType.CANCEL, 'OK', Gtk.ResponseType.OK)
+        area = d.get_content_area()
+        area.set_spacing(10)
+        area.set_border_width(20)
+        area.add(Gtk.Label(label='Enter the current password of your user:'))
+        e = Gtk.Entry(visibility=False, activates_default=True)
+        area.add(e)
+        d.set_default_response(Gtk.ResponseType.OK)
+        d.show_all()
+        ok = d.run() == Gtk.ResponseType.OK
+        pw = e.get_text()
+        d.destroy()
+        return pw if ok else None
+
+    def on_apply(self, *_):
+        user = self.username.get_text().strip()
+        pw, pw2 = self.password.get_text(), self.password2.get_text()
+        host = self.hostname.get_text().strip()
+        if not USER_RE.match(user) or user in ('root', 'fastrpc'):
+            return self.error('User name: lower-case letters, digits, "-" and "_", starting with a letter.')
+        if not pw:
+            return self.error('Choose a password.')
+        if pw != pw2:
+            return self.error('The two passwords are not the same.')
+        if pw == DEFAULT_PASSWORD:
+            return self.error('Choose a password other than 1234.')
+        if not HOST_RE.match(host):
+            return self.error('Tablet name: letters, digits and "-".')
+        cfg = {
+            'fullname': self.fullname.get_text().strip(),
+            'user': user, 'password': pw, 'hostname': host,
+            'zone': self.zone.get_active_id(), 'lang': self.lang.get_active_id(),
+            'layout': self.layout.get_active_id(), 'ssh': self.ssh.get_active(),
+            'old_user': os.environ.get('USER', 'alarm'),
+        }
+        rundir = os.environ.get('XDG_RUNTIME_DIR') or tempfile.gettempdir()
+        while True:
+            fd, path = tempfile.mkstemp(prefix='gta4l-setup-', suffix='.json', dir=rundir)
+            with os.fdopen(fd, 'w') as f:
+                json.dump(cfg, f)
+            r = subprocess.run(['sudo', '-S', '-p', '', '--', APPLY, path],
+                               input=self.sudo_password + '\n', capture_output=True, text=True)
+            if os.path.exists(path):
+                os.remove(path)
+            if r.returncode == 0:
+                break
+            if 'incorrect password' in r.stderr.lower() or 'try again' in r.stderr.lower() \
+                    or 'a password is required' in r.stderr.lower():
+                pw_now = self.ask_current_password()
+                if pw_now is None:
+                    return self.error('Not changed.')
+                self.sudo_password = pw_now
+                continue
+            return self.error('Setup failed: ' + (r.stderr.strip() or r.stdout.strip())[-400:])
+        self.status.get_style_context().remove_class('error')
+        self.status.set_text('Done. Restarting…')
+        self.apply_btn.set_sensitive(False)
+        GLib.timeout_add_seconds(2, lambda: subprocess.run(['systemctl', 'reboot']) and False)
+
+
+win = Setup()
+win.show_all()
+Gtk.main()

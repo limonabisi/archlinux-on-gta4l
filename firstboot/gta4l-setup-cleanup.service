@@ -1,0 +1,12 @@
+[Unit]
+Description=Remove the default user after the tablet setup
+ConditionPathExists=/var/lib/gta4l-setup/remove-user
+Before=display-manager.service systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+# Only the default user 'alarm' can be removed this way
+ExecStart=/bin/sh -c 'if [ "$(cat /var/lib/gta4l-setup/remove-user)" = alarm ]; then userdel -r alarm; fi; rm -f /var/lib/gta4l-setup/remove-user'
+
+[Install]
+WantedBy=multi-user.target

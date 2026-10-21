@@ -1,0 +1,99 @@
+#!/usr/bin/python3 -I
+"""Makes the changes chosen in gta4l-setup. Runs as root through sudo.
+
+  gta4l-setup-apply <settings.json> [--dry-run]
+
+The settings file is read and removed at once; the password never appears on
+a command line.
+"""
+import json
+import os
+import pwd
+import re
+import subprocess
+import sys
+
+STATE = '/var/lib/gta4l-setup'
+USER_RE = re.compile(r'^[a-z_][a-z0-9_-]{0,31}$')
+HOST_RE = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$')
+LANGS = ('en_US.UTF-8', 'tr_TR.UTF-8')
+LAYOUT_RE = re.compile(r'^[a-z]{2,3}(\([a-z]+\))?$')
+GROUPS = ('wheel', 'audio', 'video', 'input')
+
+dry = '--dry-run' in sys.argv
+path = sys.argv[1]
+with open(path) as f:
+    cfg = json.load(f)
+if not dry:
+    os.remove(path)
+
+
+def run(cmd, data=None):
+    if dry:
+        print('RUN', cmd if data is None else cmd + ['<stdin>'])
+        return
+    subprocess.run(cmd, input=data, text=True, check=True)
+
+
+def write(p, text, mode=0o644):
+    if dry:
+        print('WRITE', p, repr(text))
+        return
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, 'w') as f:
+        f.write(text)
+    os.chmod(p, mode)
+
+
+def exists(user):
+    try:
+        pwd.getpwnam(user)
+        return True
+    except KeyError:
+        return False
+
+
+user, old = cfg['user'], cfg.get('old_user', 'alarm')
+fullname = re.sub(r'[:,\n]', ' ', cfg.get('fullname', ''))[:64]
+if not USER_RE.match(user) or user in ('root', 'fastrpc'):
+    sys.exit('bad user name')
+if not cfg['password'] or '\n' in cfg['password']:
+    sys.exit('bad password')
+if not HOST_RE.match(cfg['hostname']):
+    sys.exit('bad tablet name')
+zone = cfg['zone']
+if not re.match(r'^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)+$', zone) or not os.path.exists('/usr/share/zoneinfo/' + zone):
+    sys.exit('bad time zone')
+if cfg['lang'] not in LANGS or not LAYOUT_RE.match(cfg['layout']):
+    sys.exit('bad language or layout')
+
+# The user and its password (the sudo password too)
+if user == old:
+    if not exists(user):
+        sys.exit('no such user')
+    run(['usermod', '-c', fullname, user])
+elif exists(user):
+    sys.exit('the user name %s is already taken' % user)
+else:
+    run(['useradd', '-m', '-G', ','.join(GROUPS), '-s', '/bin/bash', '-c', fullname, user])
+for g in GROUPS:
+    run(['gpasswd', '-a', user, g])
+run(['chpasswd'], f"{user}:{cfg['password']}\n")
+if user != old and old == 'alarm' and exists('alarm'):
+    # The session of 'alarm' is still open: remove it on the next boot
+    write(STATE + '/remove-user', 'alarm\n')
+
+# Tablet name, time zone, language, keyboard
+run(['hostnamectl', 'set-hostname', cfg['hostname']])
+run(['timedatectl', 'set-timezone', zone])
+run(['localectl', 'set-locale', 'LANG=' + cfg['lang']])
+layout = cfg['layout']
+base, variant = (layout.split('(')[0], layout.split('(')[1].rstrip(')')) if '(' in layout else (layout, '')
+run(['localectl', '--no-convert', 'set-x11-keymap', base, '', variant])
+write('/etc/xdg/kxkbrc', '[Layout]\nLayoutList=%s\nVariantList=%s\nUse=true\n' % (base, variant))
+
+# SSH
+run(['systemctl', 'enable' if cfg['ssh'] else 'disable', 'sshd.service'])
+
+write(STATE + '/done', '')
+print('ok')
