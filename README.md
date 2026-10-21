@@ -129,6 +129,15 @@ is `arch-userdata.tar`; flash it with Odin as AP.
 Run `sudo sh gta4l-tani.sh > report.txt` on the tablet and send report.txt
 (serial numbers and MAC addresses are hidden).
 
+## Panels
+
+The SM-T500 comes with 15 different display panels and three kinds of touch
+controller (Novatek, FocalTech, Himax). The kernel recognises the fitted panel
+from the bootloader and loads the matching touch firmware, so one image works on
+every variant. The list is in
+[pmaports-gta4l](https://github.com/limonabisi/pmaports-gta4l#panels); only the
+NT36523 lide-hsd panel has been tested.
+
 ## Status
 
 ✅ works · ⚠️ partial · ❌ broken · ❔ untested on Arch
@@ -137,7 +146,7 @@ Run `sudo sh gta4l-tani.sh > report.txt` on the tablet and send report.txt
 |---|:---:|---|
 | Boot (U-Boot + pmOS kernel 7.2) | ✅ | Arch root on `userdata` |
 | Display | ✅ | 1200x2000, brightness control |
-| Touchscreen | ✅ | NT36523 (lide-hsd panel) tested |
+| Touchscreen | ✅ | NT36523 (lide-hsd) tested; all 15 panel variants supported |
 | GPU acceleration | ✅ | Adreno 610: freedreno (OpenGL), Turnip (Vulkan) |
 | Plasma (Wayland) + SDDM | ✅ | |
 | On-screen keyboard | ✅ | plasma-keyboard |
