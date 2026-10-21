@@ -20,10 +20,10 @@ DONE = '/var/lib/gta4l-setup/done'
 APPLY = '/usr/local/lib/gta4l-setup/gta4l-setup-apply'
 DEFAULT_PASSWORD = '1234'
 
-LANGUAGES = [('en_US.UTF-8', 'English'), ('tr_TR.UTF-8', 'Türkçe')]
-LAYOUTS = [('us', 'English (US)'), ('tr', 'Türkçe Q'), ('tr(f)', 'Türkçe F'),
-           ('de', 'Deutsch'), ('fr', 'Français'), ('gb', 'English (UK)'),
-           ('es', 'Español'), ('it', 'Italiano'), ('ru', 'Русский')]
+LANGUAGES = [('en_US.UTF-8', 'English (US)'), ('tr_TR.UTF-8', 'Turkish')]
+LAYOUTS = [('us', 'English (US)'), ('gb', 'English (UK)'), ('tr', 'Turkish Q'),
+           ('tr(f)', 'Turkish F'), ('de', 'German'), ('fr', 'French'),
+           ('es', 'Spanish'), ('it', 'Italian'), ('ru', 'Russian')]
 USER_RE = re.compile(r'^[a-z_][a-z0-9_-]{0,31}$')
 HOST_RE = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$')
 
@@ -34,8 +34,8 @@ TEXT = {
         's_welcome': 'Welcome', 's_account': 'Account', 's_tablet': 'Tablet',
         's_services': 'Services', 's_summary': 'Summary',
         'welcome_t': 'Welcome to Arch Linux',
-        'welcome_s': 'A few questions and your tablet is ready. You can run this setup again later with “gta4l-setup” or from the application menu.',
-        'language': 'Language', 'keyboard': 'Keyboard layout',
+        'welcome_s': 'A few questions and your tablet is ready. The language you pick is the language of the system. You can run this setup again later with “gta4l-setup” or from the application menu.',
+        'language': 'System language', 'keyboard': 'Keyboard layout',
         'account_t': 'Your account',
         'account_s': 'The password is also your sudo password: you need it to install software and change system settings.',
         'fullname': 'Full name', 'fullname_ph': 'optional',
@@ -46,7 +46,7 @@ TEXT = {
         'ssh': 'SSH', 'ssh_s': 'Log in to the tablet from another computer over Wi-Fi or USB.',
         'summary_t': 'Ready to set up', 'summary_s': 'Check your choices. The tablet restarts when it is done.',
         'sum_user': 'User', 'sum_sudo': 'sudo password', 'sum_sudo_v': 'the password you chose',
-        'sum_host': 'Tablet name', 'sum_zone': 'Time zone', 'sum_lang': 'Language',
+        'sum_host': 'Tablet name', 'sum_zone': 'Time zone', 'sum_lang': 'System language',
         'sum_kb': 'Keyboard', 'sum_ssh': 'SSH', 'on': 'On', 'off': 'Off',
         'sum_alarm': 'The default user “alarm” is removed on the next start.',
         'back': 'Back', 'next': 'Next', 'later': 'Later', 'apply': 'Set up',
@@ -60,39 +60,6 @@ TEXT = {
         'cur_pw_t': 'Current password', 'cur_pw': 'Enter the current password of your user:',
         'cancel': 'Cancel', 'ok': 'OK', 'not_changed': 'Nothing was changed.',
         'weak': 'Weak', 'fair': 'Fair', 'good': 'Good', 'strong': 'Strong',
-    },
-    'tr': {
-        'window': 'Tablet kurulumu',
-        'brand': 'Arch Linux ARM', 'device': 'Galaxy Tab A7',
-        's_welcome': 'Hoş geldiniz', 's_account': 'Hesap', 's_tablet': 'Tablet',
-        's_services': 'Servisler', 's_summary': 'Özet',
-        'welcome_t': 'Arch Linux’a hoş geldiniz',
-        'welcome_s': 'Birkaç soru ve tabletiniz hazır. Bu kurulumu daha sonra “gta4l-setup” komutuyla ya da uygulama menüsünden yeniden açabilirsiniz.',
-        'language': 'Dil', 'keyboard': 'Klavye düzeni',
-        'account_t': 'Hesabınız',
-        'account_s': 'Bu şifre aynı zamanda sudo şifrenizdir: program kurmak ve sistem ayarlarını değiştirmek için gerekir.',
-        'fullname': 'Ad soyad', 'fullname_ph': 'isteğe bağlı',
-        'username': 'Kullanıcı adı', 'password': 'Şifre', 'password2': 'Şifre (tekrar)',
-        'tablet_t': 'Tabletiniz', 'tablet_s': 'Tabletin ağda görünen adı ve saati.',
-        'hostname': 'Tablet adı', 'region': 'Bölge', 'city': 'Şehir',
-        'services_t': 'Servisler', 'services_s': 'Sadece ihtiyacınız olanı açın.',
-        'ssh': 'SSH', 'ssh_s': 'Başka bir bilgisayardan Wi-Fi ya da USB üzerinden tablete bağlanın.',
-        'summary_t': 'Kuruluma hazır', 'summary_s': 'Seçimlerinizi kontrol edin. Bitince tablet yeniden başlar.',
-        'sum_user': 'Kullanıcı', 'sum_sudo': 'sudo şifresi', 'sum_sudo_v': 'seçtiğiniz şifre',
-        'sum_host': 'Tablet adı', 'sum_zone': 'Saat dilimi', 'sum_lang': 'Dil',
-        'sum_kb': 'Klavye', 'sum_ssh': 'SSH', 'on': 'Açık', 'off': 'Kapalı',
-        'sum_alarm': 'Varsayılan “alarm” kullanıcısı bir sonraki açılışta silinir.',
-        'back': 'Geri', 'next': 'İleri', 'later': 'Sonra', 'apply': 'Kur',
-        'working_t': 'Kuruluyor…', 'working_s': 'Birkaç saniye sürer.',
-        'done_t': 'Her şey hazır', 'done_s': 'Tablet şimdi yeniden başlıyor. Yeni şifrenizle giriş yapın.',
-        'fail_t': 'Bir sorun oldu', 'restart': 'Şimdi yeniden başlat',
-        'e_user': 'Kullanıcı adı: küçük harf, rakam, “-” ve “_”; harfle başlamalı.',
-        'e_pw': 'Bir şifre seçin.', 'e_pw2': 'İki şifre aynı değil.',
-        'e_1234': '1234 dışında bir şifre seçin.',
-        'e_host': 'Tablet adı: harf, rakam ve “-”.',
-        'cur_pw_t': 'Mevcut şifre', 'cur_pw': 'Kullanıcınızın şu anki şifresini girin:',
-        'cancel': 'İptal', 'ok': 'Tamam', 'not_changed': 'Hiçbir şey değiştirilmedi.',
-        'weak': 'Zayıf', 'fair': 'Orta', 'good': 'İyi', 'strong': 'Güçlü',
     },
 }
 
@@ -207,7 +174,7 @@ STEPS = ['welcome', 'account', 'tablet', 'services', 'summary']
 class Setup(Gtk.Window):
     def __init__(self):
         super().__init__()
-        self.lang = 'tr' if os.environ.get('LANG', '').startswith('tr') else 'en'
+        self.lang = 'en'
         self.texts = []          # (setter, key)
         self.step = 0
         self.sudo_password = DEFAULT_PASSWORD
@@ -336,9 +303,10 @@ class Setup(Gtk.Window):
     # Pages
     def build_welcome(self):
         card = self.page('welcome', 'welcome_t', 'welcome_s')
-        self.lang_combo = self.field(card, 'language', self.combo(LANGUAGES, 'tr_TR.UTF-8' if self.lang == 'tr' else 'en_US.UTF-8'))
+        sys_tr = os.environ.get('LANG', '').startswith('tr')
+        self.lang_combo = self.field(card, 'language', self.combo(LANGUAGES, 'tr_TR.UTF-8' if sys_tr else 'en_US.UTF-8'))
         self.lang_combo.connect('changed', self.on_lang)
-        self.kb_combo = self.field(card, 'keyboard', self.combo(LAYOUTS, 'tr' if self.lang == 'tr' else 'us'))
+        self.kb_combo = self.field(card, 'keyboard', self.combo(LAYOUTS, 'tr' if sys_tr else 'us'))
 
     def build_account(self):
         card = self.page('account', 'account_t', 'account_s')
@@ -441,10 +409,8 @@ class Setup(Gtk.Window):
         self.on_password()
 
     def on_lang(self, *_):
-        self.lang = 'tr' if self.lang_combo.get_active_id().startswith('tr') else 'en'
-        self.kb_combo.set_active_id('tr' if self.lang == 'tr' else 'us')
-        self.retranslate()
-        self.show_step()
+        # The setup itself stays in English; suggest the matching keyboard
+        self.kb_combo.set_active_id('tr' if self.lang_combo.get_active_id().startswith('tr') else 'us')
 
     def on_fullname(self, *_):
         if self.username_edited:
