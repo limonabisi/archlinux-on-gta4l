@@ -33,16 +33,21 @@ itself (the on-screen keyboard works in it) and asks for:
 - your user name and full name (a new name replaces `alarm`, which is
   removed on the next boot),
 - your password, which is also your `sudo` password,
-- the tablet's name, the time zone, the language and the keyboard layout,
+- the tablet's name, the time zone, the system language and the keyboard
+  layout,
 - whether SSH should be on.
 
-"Apply and restart" makes the changes and restarts the tablet. "Later" closes
-it until the next login; run it again any time with `gta4l-setup` or from the
-application menu ("Tablet setup").
+"Set up" makes the changes and restarts the tablet; then log in with your new
+user and password. "Later" closes it until the next login; run it again any
+time with `gta4l-setup` or from the application menu ("Tablet setup").
 
-`root` is locked; use `sudo`. SSH stays off unless you turn it on in the setup.
+<p align="center">
+  <img src="screenshots/en-1-welcome.png" width="45%">
+  <img src="screenshots/en-2-account.png" width="45%">
+</p>
 
-Over the USB cable the tablet is `alarm@172.16.42.1`.
+`root` is locked; use `sudo`. SSH stays off unless you turn it on in the setup;
+then the tablet is `<your user>@172.16.42.1` over the USB cable.
 
 Updates: `sudo pacman -Syu`. The kernel lives on the `cache` partition, so
 pacman does not touch it.
@@ -99,10 +104,13 @@ is `arch-userdata.tar`; flash it with Odin as AP.
 ## What you get
 
 - Plasma (Wayland) with the SDDM login screen and the on-screen keyboard.
+- A tablet setup on the first login (user, password, name, time zone,
+  language, keyboard, SSH).
 - NetworkManager, Bluetooth, PipeWire (kept at 16 bit: 24 bit plays far too
   quietly), Firefox, power profiles (tuned-ppd).
 - Screen rotation and the light sensor through the ADSP.
-- `ssh alarm@172.16.42.1` over the USB cable (the PC gets an address by DHCP).
+- A network over the USB cable: the tablet is `172.16.42.1` and the PC gets an
+  address by DHCP (SSH once it is turned on).
 - No swap or zram; Baloo, KWallet, kaccess, at-spi and the X11 tray/menu
   bridges are off to save RAM; glibc keeps two malloc arenas.
 - Wi-Fi power saving off, weekly TRIM, a 64 MB journal.
@@ -144,7 +152,7 @@ Run `sudo sh gta4l-tani.sh > report.txt` on the tablet and send report.txt
 | Charging | ✅ | |
 | Offline charging | ✅ | In U-Boot, with the percentage |
 | Power profiles | ✅ | tuned-ppd |
-| USB networking | ✅ | `ssh alarm@172.16.42.1`, DHCP for the PC |
+| USB networking | ✅ | Tablet at `172.16.42.1`, DHCP for the PC |
 | USB OTG (host) | ✅ | Keyboard, mouse, storage, Ethernet |
 | USB OTG while charging | ❌ | No USB PD on the PMI632 |
 | Suspend (s2idle) | ❔ | Works on postmarketOS |
