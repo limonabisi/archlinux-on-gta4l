@@ -26,6 +26,9 @@ elif pacman -S --noconfirm --needed power-profiles-daemon; then
 	systemctl enable --now power-profiles-daemon
 fi
 
+echo "== Venus: hardware video decode is safe with the current modules"
+rm -f /etc/modprobe.d/gta4l-venus.conf
+
 echo "== system settings"
 sh "$HERE/gta4l-ayarlar.sh"
 

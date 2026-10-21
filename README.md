@@ -9,7 +9,8 @@ kernel [limonabisi/linux-gta4l](https://github.com/limonabisi/linux-gta4l/tree/g
 
 - `gta4l-arch-kur.sh`: builds the image.
 - `gta4l-parts.tar.gz`: the gta4l parts, unpacked over the rootfs:
-  - kernel modules (7.2.0, with Bluetooth RFCOMM/BNEP)
+  - kernel modules (7.2.0, with Bluetooth RFCOMM/BNEP and the Venus fix for
+    Samsung's firmware)
   - firmware from linux-firmware, the touch firmware of every panel variant,
     the speaker tuning and the GPU zap shader
   - udev rules, systemd units, ALSA UCM, sensor data
@@ -61,7 +62,8 @@ is `arch-userdata.tar`; flash it with Odin as AP.
 
 ## Known problems
 
-- Venus (hardware video) is blacklisted: encoding crashes the tablet.
+- Hardware video: only H.264 and HEVC decoding. Samsung's Venus firmware
+  (6.0.49) predates the fixes of 6.0.55, so encoding and VP9 are off.
 - USB OTG and charging at the same time is not possible: the PMI632 has no
   USB PD PHY, so a hub cannot swap the power role.
 - Headphones: only the left channel plays.
@@ -99,7 +101,7 @@ Run `sudo sh gta4l-tani.sh > report.txt` on the tablet and send report.txt
 | USB OTG (host) | ✅ | Keyboard, mouse, storage, Ethernet |
 | USB OTG while charging | ❌ | No USB PD on the PMI632 |
 | Suspend (s2idle) | ❔ | Works on postmarketOS |
-| Hardware video decode (Venus) | ❌ | Blacklisted on Arch for now |
+| Hardware video decode (Venus) | ⚠️ | H.264 and HEVC up to 1080p; VP9 off (firmware crash) |
 | Hardware video encode | ❌ | Samsung firmware 6.0.49 is too old |
 | Camera | ❌ | No driver |
 | GPS | ❌ | No position (NMEA times out) |

@@ -124,8 +124,6 @@ echo gta4l > $R/etc/hostname
 ln -sf /usr/share/zoneinfo/Europe/Istanbul $R/etc/localtime
 sed -i -e 's/^#tr_TR.UTF-8/tr_TR.UTF-8/' -e 's/^#en_US.UTF-8/en_US.UTF-8/' $R/etc/locale.gen
 echo LANG=en_US.UTF-8 > $R/etc/locale.conf
-# Venus (video decode) resets the tablet; keep it off for now
-printf 'blacklist venus_core\nblacklist venus_dec\nblacklist venus_enc\n' > $R/etc/modprobe.d/gta4l-venus.conf
 mkdir -p $R/etc/sudoers.d
 cp $HERE/gta4l-tani.sh $R/usr/local/bin/gta4l-tani
 chmod 755 $R/usr/local/bin/gta4l-tani
