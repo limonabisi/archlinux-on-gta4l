@@ -71,3 +71,36 @@ is `arch-userdata.tar`; flash it with Odin as AP.
 
 Run `sudo sh gta4l-tani.sh > report.txt` on the tablet and send report.txt
 (serial numbers and MAC addresses are hidden).
+
+## Status
+
+✅ works · ⚠️ partial · ❌ broken · ❔ untested on Arch
+
+| Feature | Status | Notes |
+|---|:---:|---|
+| Boot (U-Boot + pmOS kernel 7.2) | ✅ | Arch root on `userdata` |
+| Display | ✅ | 1200x2000, brightness control |
+| Touchscreen | ✅ | NT36523 (lide-hsd panel) tested |
+| GPU acceleration | ✅ | Adreno 610: freedreno (OpenGL), Turnip (Vulkan) |
+| Plasma (Wayland) + SDDM | ✅ | |
+| On-screen keyboard | ✅ | plasma-keyboard |
+| Wi-Fi | ✅ | WCN3990, power saving off |
+| Bluetooth | ✅ | RFCOMM and BNEP modules included |
+| Speakers | ✅ | Kept at 16 bit; volume above 100 % allowed |
+| Microphone | ✅ | |
+| Headphones | ⚠️ | Only the left channel plays |
+| Screen rotation | ✅ | Accelerometer through the ADSP |
+| Ambient light / compass | ❔ | Work on postmarketOS |
+| Battery level | ⚠️ | The percentage can drift |
+| Charging | ✅ | |
+| Offline charging | ✅ | In U-Boot, with the percentage |
+| Power profiles | ✅ | tuned-ppd |
+| USB networking | ✅ | `ssh alarm@172.16.42.1`, DHCP for the PC |
+| USB OTG (host) | ✅ | Keyboard, mouse, storage, Ethernet |
+| USB OTG while charging | ❌ | No USB PD on the PMI632 |
+| Suspend (s2idle) | ❔ | Works on postmarketOS |
+| Hardware video decode (Venus) | ❌ | Blacklisted on Arch for now |
+| Hardware video encode | ❌ | Samsung firmware 6.0.49 is too old |
+| Camera | ❌ | No driver |
+| GPS | ❌ | No position (NMEA times out) |
+| Mobile data / calls | — | SM-T500 is Wi-Fi only |
