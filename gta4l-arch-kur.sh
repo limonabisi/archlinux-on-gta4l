@@ -8,8 +8,8 @@
 # binfmt (Debian/Ubuntu: apt install qemu-user-static binfmt-support
 # libarchive-tools android-sdk-libsparse-utils).
 #
-# The tablet keeps the postmarketOS boot (U-Boot) and cache (/boot: kernel,
-# initramfs); this image replaces only userdata. It carries the pmOS root UUID,
+# The tablet keeps its boot image (U-Boot with the kernel, initramfs and DTB);
+# this image replaces only userdata. It carries the pmOS root UUID,
 # so the pmOS initramfs mounts it.
 set -e
 [ "$(id -u)" = 0 ] || { echo "run as root: sudo sh $0 <rootfs>"; exit 1; }
@@ -92,7 +92,7 @@ retry() {
 }
 pacman-key --init
 pacman-key --populate archlinuxarm
-# The tablet boots the kernel and initramfs from its cache partition, and
+# The tablet boots the kernel and initramfs from its boot image, and
 # gta4l-parts carries the firmware: drop the generic kernel and the
 # linux-firmware packages before the upgrade, so they are not downloaded
 pacman -Rdd --noconfirm $(pacman -Qq | grep -E '^(linux-aarch64|linux-firmware.*|mkinitcpio.*)$') || true
@@ -178,4 +178,4 @@ img2simg $W/root.img $W/odin/userdata.img
 rm -f $W/root.img
 (cd $W/odin && tar -H ustar -cf $HERE/arch-userdata.tar userdata.img)
 ls -la $HERE/arch-userdata.tar
-echo "DONE: flash arch-userdata.tar with Odin (AP). Keep the postmarketOS boot and cache."
+echo "DONE: flash arch-userdata.tar with Odin (AP). Keep the boot image."

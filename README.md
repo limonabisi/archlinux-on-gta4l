@@ -8,9 +8,9 @@ kernel [limonabisi/linux-gta4l](https://github.com/limonabisi/linux-gta4l/tree/g
 ## Quick install (prebuilt image)
 
 The [Releases](https://github.com/limonabisi/archlinux-on-gta4l/releases) page has
-a ready image for the SM-T500 (Wi-Fi). It holds the whole system: U-Boot and the
-kernel (`boot`), `dtbo`, the kernel and initramfs on `cache`, and Arch Linux ARM on
-`userdata`.
+a ready image for the SM-T500 (Wi-Fi). It holds the whole system: U-Boot with the
+kernel, initramfs and device tree (`boot`), `dtbo`, and Arch Linux ARM on
+`userdata`. The `cache` partition is not used.
 
 **This erases everything on the tablet.** You need an unlocked bootloader:
 Settings → Developer options → OEM unlocking, then in Download mode hold
@@ -49,7 +49,7 @@ time with `gta4l-setup` or from the application menu ("Tablet setup").
 `root` is locked; use `sudo`. SSH stays off unless you turn it on in the setup;
 then the tablet is `<your user>@172.16.42.1` over the USB cable.
 
-Updates: `sudo pacman -Syu`. The kernel lives on the `cache` partition, so
+Updates: `sudo pacman -Syu`. The kernel is inside the `boot` image, so
 pacman does not touch it.
 
 Back to Android: flash Samsung's stock firmware with Odin.
@@ -81,9 +81,9 @@ partitions at boot, read with mtools, never mounted.
 
 ### Requirements
 
-- The tablet already runs postmarketOS from the pmaports-gta4l image. Its
-  `boot` (U-Boot) and `cache` (kernel, initramfs) stay; only `userdata` is
-  replaced.
+- The tablet already runs postmarketOS from the pmaports-gta4l image, or the
+  prebuilt image above. Its `boot` (U-Boot with the kernel) stays; only
+  `userdata` is replaced.
 - A Linux PC, or WSL, with:
 
 ```sh
