@@ -5,6 +5,47 @@ ARM rootfs plus the gta4l parts of the postmarketOS port
 ([limonabisi/pmaports-gta4l](https://github.com/limonabisi/pmaports-gta4l),
 kernel [limonabisi/linux-gta4l](https://github.com/limonabisi/linux-gta4l/tree/gta4l-7.2-clean)).
 
+## Quick install (prebuilt image)
+
+The [Releases](https://github.com/limonabisi/archlinux-on-gta4l/releases) page has
+a ready image for the SM-T500 (Wi-Fi). It holds the whole system: U-Boot and the
+kernel (`boot`), `dtbo`, the kernel and initramfs on `cache`, and Arch Linux ARM on
+`userdata`.
+
+**This erases everything on the tablet.** You need an unlocked bootloader:
+Settings → Developer options → OEM unlocking, then in Download mode hold
+Volume Up to unlock.
+
+1. Download `gta4l-arch.tar.xz` (about 1 GB) and `SHA256SUMS`.
+2. Unpack it into `gta4l-arch.tar` (4.4 GB):
+   - Windows: extract it with [7-Zip](https://www.7-zip.org).
+   - Linux: `xz -dk gta4l-arch.tar.xz`
+3. Power the tablet off, hold Volume Up + Volume Down and plug in the USB
+   cable: Download mode.
+4. In Odin, put `gta4l-arch.tar` in **AP** and press Start.
+5. The first boot takes a few minutes: the firmware is copied from the
+   tablet's own partitions, the root filesystem grows to fill `userdata`
+   and pacman gets its keyring.
+
+Log in as **`alarm`**, password **`1234`**. Change it right away:
+
+```sh
+passwd
+```
+
+`root` is locked; use `sudo`. SSH is off; after changing the password:
+
+```sh
+sudo systemctl enable --now sshd
+```
+
+Over the USB cable the tablet is `alarm@172.16.42.1`.
+
+Updates: `sudo pacman -Syu`. The kernel lives on the `cache` partition, so
+pacman does not touch it.
+
+Back to Android: flash Samsung's stock firmware with Odin.
+
 ## Contents
 
 - `gta4l-arch-kur.sh`: builds the image.
@@ -27,7 +68,9 @@ Samsung's own firmware (ADSP, CDSP, Venus, Wi-Fi DSP) is not in this
 repository: `gta4l-firmware-import` copies it from the tablet's firmware
 partitions at boot, read with mtools, never mounted.
 
-## Requirements
+## Build the image yourself
+
+### Requirements
 
 - The tablet already runs postmarketOS from the pmaports-gta4l image. Its
   `boot` (U-Boot) and `cache` (kernel, initramfs) stay; only `userdata` is
@@ -38,7 +81,7 @@ partitions at boot, read with mtools, never mounted.
 sudo apt install qemu-user-static binfmt-support libarchive-tools android-sdk-libsparse-utils
 ```
 
-## Use
+### Build
 
 ```sh
 wget http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
