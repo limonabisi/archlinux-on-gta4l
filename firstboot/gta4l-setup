@@ -1,9 +1,9 @@
 #!/usr/bin/python3 -I
 """First-boot setup for Arch Linux ARM on the Galaxy Tab A7 (gta4l).
 
-Asks for the user, the password (also the sudo password), the tablet's name,
-the time zone, the language, the keyboard layout and SSH, then has
-gta4l-setup-apply make the changes as root and reboots.
+Walks through the language, the user account (its password is also the sudo
+password), the tablet's name and time zone, and SSH, then has
+gta4l-setup-apply make the changes as root and restarts the tablet.
 
   gta4l-setup               open the setup
   gta4l-setup --first-boot  open it only if the setup has not been done yet
@@ -14,31 +14,156 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 
 DONE = '/var/lib/gta4l-setup/done'
 APPLY = '/usr/local/lib/gta4l-setup/gta4l-setup-apply'
 DEFAULT_PASSWORD = '1234'
 
-LANGUAGES = [('English (US)', 'en_US.UTF-8'), ('Türkçe', 'tr_TR.UTF-8')]
-LAYOUTS = [('English (US)', 'us'), ('Turkish Q', 'tr'), ('Turkish F', 'tr(f)'),
-           ('German', 'de'), ('French', 'fr'), ('English (UK)', 'gb'),
-           ('Spanish', 'es'), ('Italian', 'it'), ('Russian', 'ru')]
+LANGUAGES = [('en_US.UTF-8', 'English'), ('tr_TR.UTF-8', 'Türkçe')]
+LAYOUTS = [('us', 'English (US)'), ('tr', 'Türkçe Q'), ('tr(f)', 'Türkçe F'),
+           ('de', 'Deutsch'), ('fr', 'Français'), ('gb', 'English (UK)'),
+           ('es', 'Español'), ('it', 'Italiano'), ('ru', 'Русский')]
 USER_RE = re.compile(r'^[a-z_][a-z0-9_-]{0,31}$')
 HOST_RE = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$')
 
+TEXT = {
+    'en': {
+        'window': 'Tablet setup',
+        'brand': 'Arch Linux ARM', 'device': 'Galaxy Tab A7',
+        's_welcome': 'Welcome', 's_account': 'Account', 's_tablet': 'Tablet',
+        's_services': 'Services', 's_summary': 'Summary',
+        'welcome_t': 'Welcome to Arch Linux',
+        'welcome_s': 'A few questions and your tablet is ready. You can run this setup again later with “gta4l-setup” or from the application menu.',
+        'language': 'Language', 'keyboard': 'Keyboard layout',
+        'account_t': 'Your account',
+        'account_s': 'The password is also your sudo password: you need it to install software and change system settings.',
+        'fullname': 'Full name', 'fullname_ph': 'optional',
+        'username': 'User name', 'password': 'Password', 'password2': 'Password again',
+        'tablet_t': 'Your tablet', 'tablet_s': 'How the tablet appears on the network, and its clock.',
+        'hostname': 'Tablet name', 'region': 'Region', 'city': 'City',
+        'services_t': 'Services', 'services_s': 'Turn on only what you need.',
+        'ssh': 'SSH', 'ssh_s': 'Log in to the tablet from another computer over Wi-Fi or USB.',
+        'summary_t': 'Ready to set up', 'summary_s': 'Check your choices. The tablet restarts when it is done.',
+        'sum_user': 'User', 'sum_sudo': 'sudo password', 'sum_sudo_v': 'the password you chose',
+        'sum_host': 'Tablet name', 'sum_zone': 'Time zone', 'sum_lang': 'Language',
+        'sum_kb': 'Keyboard', 'sum_ssh': 'SSH', 'on': 'On', 'off': 'Off',
+        'sum_alarm': 'The default user “alarm” is removed on the next start.',
+        'back': 'Back', 'next': 'Next', 'later': 'Later', 'apply': 'Set up',
+        'working_t': 'Setting up…', 'working_s': 'This takes a few seconds.',
+        'done_t': 'All set', 'done_s': 'The tablet restarts now. Log in with your new password.',
+        'fail_t': 'Something went wrong', 'restart': 'Restart now',
+        'e_user': 'User name: lower-case letters, digits, “-” and “_”, starting with a letter.',
+        'e_pw': 'Choose a password.', 'e_pw2': 'The two passwords are not the same.',
+        'e_1234': 'Choose a password other than 1234.',
+        'e_host': 'Tablet name: letters, digits and “-”.',
+        'cur_pw_t': 'Current password', 'cur_pw': 'Enter the current password of your user:',
+        'cancel': 'Cancel', 'ok': 'OK', 'not_changed': 'Nothing was changed.',
+        'weak': 'Weak', 'fair': 'Fair', 'good': 'Good', 'strong': 'Strong',
+    },
+    'tr': {
+        'window': 'Tablet kurulumu',
+        'brand': 'Arch Linux ARM', 'device': 'Galaxy Tab A7',
+        's_welcome': 'Hoş geldiniz', 's_account': 'Hesap', 's_tablet': 'Tablet',
+        's_services': 'Servisler', 's_summary': 'Özet',
+        'welcome_t': 'Arch Linux’a hoş geldiniz',
+        'welcome_s': 'Birkaç soru ve tabletiniz hazır. Bu kurulumu daha sonra “gta4l-setup” komutuyla ya da uygulama menüsünden yeniden açabilirsiniz.',
+        'language': 'Dil', 'keyboard': 'Klavye düzeni',
+        'account_t': 'Hesabınız',
+        'account_s': 'Bu şifre aynı zamanda sudo şifrenizdir: program kurmak ve sistem ayarlarını değiştirmek için gerekir.',
+        'fullname': 'Ad soyad', 'fullname_ph': 'isteğe bağlı',
+        'username': 'Kullanıcı adı', 'password': 'Şifre', 'password2': 'Şifre (tekrar)',
+        'tablet_t': 'Tabletiniz', 'tablet_s': 'Tabletin ağda görünen adı ve saati.',
+        'hostname': 'Tablet adı', 'region': 'Bölge', 'city': 'Şehir',
+        'services_t': 'Servisler', 'services_s': 'Sadece ihtiyacınız olanı açın.',
+        'ssh': 'SSH', 'ssh_s': 'Başka bir bilgisayardan Wi-Fi ya da USB üzerinden tablete bağlanın.',
+        'summary_t': 'Kuruluma hazır', 'summary_s': 'Seçimlerinizi kontrol edin. Bitince tablet yeniden başlar.',
+        'sum_user': 'Kullanıcı', 'sum_sudo': 'sudo şifresi', 'sum_sudo_v': 'seçtiğiniz şifre',
+        'sum_host': 'Tablet adı', 'sum_zone': 'Saat dilimi', 'sum_lang': 'Dil',
+        'sum_kb': 'Klavye', 'sum_ssh': 'SSH', 'on': 'Açık', 'off': 'Kapalı',
+        'sum_alarm': 'Varsayılan “alarm” kullanıcısı bir sonraki açılışta silinir.',
+        'back': 'Geri', 'next': 'İleri', 'later': 'Sonra', 'apply': 'Kur',
+        'working_t': 'Kuruluyor…', 'working_s': 'Birkaç saniye sürer.',
+        'done_t': 'Her şey hazır', 'done_s': 'Tablet şimdi yeniden başlıyor. Yeni şifrenizle giriş yapın.',
+        'fail_t': 'Bir sorun oldu', 'restart': 'Şimdi yeniden başlat',
+        'e_user': 'Kullanıcı adı: küçük harf, rakam, “-” ve “_”; harfle başlamalı.',
+        'e_pw': 'Bir şifre seçin.', 'e_pw2': 'İki şifre aynı değil.',
+        'e_1234': '1234 dışında bir şifre seçin.',
+        'e_host': 'Tablet adı: harf, rakam ve “-”.',
+        'cur_pw_t': 'Mevcut şifre', 'cur_pw': 'Kullanıcınızın şu anki şifresini girin:',
+        'cancel': 'İptal', 'ok': 'Tamam', 'not_changed': 'Hiçbir şey değiştirilmedi.',
+        'weak': 'Zayıf', 'fair': 'Orta', 'good': 'İyi', 'strong': 'Güçlü',
+    },
+}
 
-def time_zones():
-    zones = set()
+CSS = b"""
+* { font-family: "Noto Sans", sans-serif; }
+window, .main { background-color: #12161c; color: #e6edf3; }
+.sidebar { background-color: #0b0e13; padding: 36px 0; border-right: 1px solid #1f2630; }
+.brand { font-size: 22pt; font-weight: 800; color: #ffffff; }
+.device { font-size: 12pt; color: #7d8b99; }
+.step { font-size: 14pt; color: #6b7785; padding: 14px 28px; border-left: 4px solid transparent; }
+.step.done { color: #9fb3c3; }
+.step.current { color: #ffffff; font-weight: 700; background-color: rgba(23, 207, 196, 0.10);
+                border-left: 4px solid #17cfc4; }
+.title { font-size: 28pt; font-weight: 800; color: #ffffff; }
+.subtitle { font-size: 13pt; color: #9aa7b4; }
+.card { background-color: #1a2029; border-radius: 16px; padding: 24px; border: 1px solid #252d38; }
+.field { font-size: 12pt; color: #9aa7b4; font-weight: 600; }
+entry { font-size: 15pt; min-height: 48px; padding: 4px 14px; border-radius: 10px;
+        background-color: #0f1318; color: #ffffff; border: 1px solid #2c3542; box-shadow: none; }
+entry:focus { border-color: #17cfc4; }
+combobox button, combobox box.linked button { font-size: 15pt; min-height: 48px; border-radius: 10px;
+        background-image: none; background-color: #0f1318; color: #ffffff; border: 1px solid #2c3542; }
+combobox menu, combobox window menu { font-size: 14pt; background-color: #1a2029; color: #e6edf3; }
+button { font-size: 14pt; min-height: 52px; padding: 0 26px; border-radius: 26px; background-image: none;
+         background-color: #232b36; color: #e6edf3; border: none; box-shadow: none; }
+button:hover { background-color: #2b3542; }
+button.accent { background-color: #17cfc4; color: #04211f; font-weight: 800; }
+button.accent:hover { background-color: #3fe0d6; }
+button.flat { background-color: transparent; color: #9aa7b4; }
+switch { min-height: 32px; min-width: 64px; border-radius: 18px; background-color: #2c3542; border: none; }
+switch:checked { background-color: #17cfc4; }
+switch slider, switch:checked slider { min-height: 28px; min-width: 28px; border-radius: 14px; margin: 2px;
+         background-image: none; background-color: #ffffff; border: none; box-shadow: none; }
+levelbar trough { min-height: 8px; border-radius: 4px; background-color: #2c3542; border: none; }
+levelbar block.filled { border-radius: 4px; }
+levelbar block.low { background-color: #ef5350; }
+levelbar block.high { background-color: #ffb74d; }
+levelbar block.full { background-color: #17cfc4; }
+.strength { font-size: 11pt; color: #9aa7b4; }
+.error { font-size: 12pt; color: #ff7b72; }
+.sumkey { font-size: 13pt; color: #9aa7b4; }
+.sumval { font-size: 14pt; color: #ffffff; font-weight: 600; }
+.note { font-size: 12pt; color: #ffb74d; }
+.logo { border: 4px solid #17cfc4; border-radius: 13px; padding: 6px 6px 5px 6px; }
+.logo-screen { background-color: rgba(23, 207, 196, 0.28); border-radius: 4px; margin-bottom: 6px; }
+.logo-dot { background-color: #17cfc4; border-radius: 4px; }
+.checkcircle { background-color: #17cfc4; border-radius: 56px; }
+.checkmark { font-size: 46pt; font-weight: 900; color: #04211f; }
+spinner { color: #17cfc4; }
+"""
+
+
+def zones():
+    found = set()
     try:
         with open('/usr/share/zoneinfo/tzdata.zi') as f:
             for line in f:
                 p = line.split()
-                if len(p) > 1 and p[0] in ('Z', 'L'):
-                    zones.add(p[1] if p[0] == 'Z' else p[2])
+                if len(p) > 1 and p[0] == 'Z':
+                    found.add(p[1])
+                elif len(p) > 2 and p[0] == 'L':
+                    found.add(p[2])
     except OSError:
         pass
-    zones = sorted(z for z in zones if '/' in z and not z.startswith(('Etc/', 'SystemV/', 'posix', 'right')))
-    return zones or ['Europe/Istanbul', 'UTC']
+    skip = ('Etc/', 'SystemV/', 'posix', 'right', 'US/', 'Canada/', 'Brazil/', 'Chile/', 'Mexico/')
+    out = {}
+    for z in sorted(found):
+        if '/' in z and not z.startswith(skip):
+            region, city = z.split('/', 1)
+            out.setdefault(region, []).append(city)
+    return out or {'Europe': ['Istanbul'], 'UTC': ['UTC']}
 
 
 def current_zone():
@@ -48,112 +173,378 @@ def current_zone():
         return 'Europe/Istanbul'
 
 
+def read(path, default):
+    try:
+        with open(path) as f:
+            return f.read().strip() or default
+    except OSError:
+        return default
+
+
+def strength(pw):
+    score = 0
+    if len(pw) >= 6:
+        score += 1
+    if len(pw) >= 10:
+        score += 1
+    if re.search(r'[a-z]', pw) and re.search(r'[A-Z]', pw):
+        score += 1
+    if re.search(r'\d', pw) and re.search(r'[^A-Za-z0-9]', pw):
+        score += 1
+    return score
+
+
 if '--first-boot' in sys.argv and os.path.exists(DONE):
     sys.exit(0)
 
 import gi  # noqa: E402
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GLib  # noqa: E402
+from gi.repository import Gtk, GLib, Pango  # noqa: E402
+
+STEPS = ['welcome', 'account', 'tablet', 'services', 'summary']
 
 
 class Setup(Gtk.Window):
     def __init__(self):
-        super().__init__(title='Tablet setup')
-        self.set_default_size(900, 1100)
-        self.set_position(Gtk.WindowPosition.CENTER)
+        super().__init__()
+        self.lang = 'tr' if os.environ.get('LANG', '').startswith('tr') else 'en'
+        self.texts = []          # (setter, key)
+        self.step = 0
+        self.sudo_password = DEFAULT_PASSWORD
+        self.username_edited = False
+        self.zones = zones()
+
+        Gtk.Settings.get_default().set_property('gtk-application-prefer-dark-theme', True)
+        css = Gtk.CssProvider()
+        css.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(self.get_screen(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
+        self.set_default_size(1200, 1000)
         self.connect('destroy', Gtk.main_quit)
 
-        css = Gtk.CssProvider()
-        css.load_from_data(b'* { font-size: 15pt; } .title { font-size: 22pt; font-weight: bold; }'
-                           b' .error { color: #d32f2f; }')
-        Gtk.StyleContext.add_provider_for_screen(self.get_screen(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        root = Gtk.Box()
+        root.get_style_context().add_class('main')
+        self.add(root)
 
-        scroll = Gtk.ScrolledWindow()
-        self.add(scroll)
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, margin=30)
-        scroll.add(box)
+        # Sidebar: brand and the steps
+        side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        side.get_style_context().add_class('sidebar')
+        side.set_size_request(300, -1)
+        root.pack_start(side, False, False, 0)
+        logo = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, halign=Gtk.Align.CENTER)
+        logo.get_style_context().add_class('logo')
+        logo.set_size_request(58, 80)
+        logo.set_margin_bottom(14)
+        screen = Gtk.Box()
+        screen.get_style_context().add_class('logo-screen')
+        logo.pack_start(screen, True, True, 0)
+        dot = Gtk.Box(halign=Gtk.Align.CENTER)
+        dot.get_style_context().add_class('logo-dot')
+        dot.set_size_request(7, 7)
+        logo.pack_start(dot, False, False, 0)
+        side.pack_start(logo, False, False, 0)
+        side.pack_start(self.label('brand', 'brand', xalign=0.5), False, False, 0)
+        dev = self.label('device', 'device', xalign=0.5)
+        dev.set_margin_bottom(36)
+        side.pack_start(dev, False, False, 0)
+        self.step_labels = []
+        for s in STEPS:
+            lab = self.label('s_' + s, 'step', xalign=0)
+            side.pack_start(lab, False, False, 0)
+            self.step_labels.append(lab)
 
-        title = Gtk.Label(label='Welcome to Arch Linux on your Galaxy Tab A7', xalign=0)
-        title.get_style_context().add_class('title')
-        title.set_line_wrap(True)
-        box.pack_start(title, False, False, 0)
-        info = Gtk.Label(xalign=0, label='Set up your account and the tablet. The password you choose is also '
-                                         'your sudo password. You can run this again later with "gta4l-setup".')
-        info.set_line_wrap(True)
-        box.pack_start(info, False, False, 0)
+        # Content: pages and the buttons
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        content.set_margin_top(48)
+        content.set_margin_bottom(32)
+        content.set_margin_start(56)
+        content.set_margin_end(56)
+        root.pack_start(content, True, True, 0)
+        self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.SLIDE_LEFT_RIGHT, transition_duration=250)
+        content.pack_start(self.stack, True, True, 0)
+        self.error = Gtk.Label(xalign=0)
+        self.error.get_style_context().add_class('error')
+        self.error.set_line_wrap(True)
+        content.pack_start(self.error, False, False, 8)
+        nav = Gtk.Box(spacing=12)
+        content.pack_end(nav, False, False, 0)
+        self.later = self.button('later', 'flat', lambda *_: self.destroy())
+        self.back = self.button('back', None, lambda *_: self.go(-1))
+        self.next = self.button('next', 'accent', lambda *_: self.go(1))
+        nav.pack_start(self.later, False, False, 0)
+        nav.pack_end(self.next, False, False, 0)
+        nav.pack_end(self.back, False, False, 0)
 
-        grid = Gtk.Grid(row_spacing=12, column_spacing=16)
-        box.pack_start(grid, False, False, 8)
-        self.row = 0
+        self.build_welcome()
+        self.build_account()
+        self.build_tablet()
+        self.build_services()
+        self.build_summary()
+        self.build_working()
+        self.retranslate()
+        self.show_step()
 
-        def add(label, widget):
-            lab = Gtk.Label(label=label, xalign=0)
-            grid.attach(lab, 0, self.row, 1, 1)
-            widget.set_hexpand(True)
-            grid.attach(widget, 1, self.row, 1, 1)
-            self.row += 1
-            return widget
+    # Helpers
+    def tr(self, key):
+        return TEXT[self.lang].get(key, key)
 
-        self.fullname = add('Full name', Gtk.Entry(placeholder_text='optional'))
-        self.username = add('User name', Gtk.Entry(text='alarm'))
-        self.password = add('Password', Gtk.Entry(visibility=False))
-        self.password2 = add('Password again', Gtk.Entry(visibility=False))
-        self.hostname = add('Tablet name', Gtk.Entry(text=self.read('/etc/hostname', 'gta4l')))
+    def label(self, key, cls=None, xalign=0.0, wrap=False):
+        lab = Gtk.Label(xalign=xalign)
+        if wrap:
+            lab.set_line_wrap(True)
+            lab.set_max_width_chars(60)
+        if cls:
+            lab.get_style_context().add_class(cls)
+        self.texts.append((lab.set_text, key))
+        return lab
 
-        self.zone = add('Time zone', Gtk.ComboBoxText())
-        zones = time_zones()
-        cur = current_zone()
-        for z in zones:
-            self.zone.append(z, z.replace('_', ' '))
-        self.zone.set_active_id(cur if cur in zones else 'Europe/Istanbul')
+    def button(self, key, cls, cb):
+        b = Gtk.Button()
+        if cls:
+            b.get_style_context().add_class(cls)
+        b.connect('clicked', cb)
+        self.texts.append((b.set_label, key))
+        return b
 
-        self.lang = add('Language', Gtk.ComboBoxText())
-        for name, code in LANGUAGES:
-            self.lang.append(code, name)
-        self.lang.set_active(0)
+    def page(self, name, title, subtitle):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.pack_start(self.label(title, 'title'), False, False, 0)
+        sub = self.label(subtitle, 'subtitle', wrap=True)
+        sub.set_margin_bottom(22)
+        box.pack_start(sub, False, False, 0)
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card.get_style_context().add_class('card')
+        box.pack_start(card, False, False, 0)
+        self.stack.add_named(box, name)
+        return card
 
-        self.layout = add('Keyboard layout', Gtk.ComboBoxText())
-        for name, code in LAYOUTS:
-            self.layout.append(code, name)
-        self.layout.set_active(0)
+    def field(self, card, key, widget):
+        lab = self.label(key, 'field')
+        lab.set_margin_top(10)
+        card.pack_start(lab, False, False, 0)
+        card.pack_start(widget, False, False, 0)
+        return widget
 
-        self.ssh = Gtk.Switch(active=False, halign=Gtk.Align.START)
-        add('SSH (remote login)', self.ssh)
+    def combo(self, items, active):
+        c = Gtk.ComboBoxText()
+        for k, v in items:
+            c.append(k, v)
+        c.set_active_id(active)
+        if c.get_active() < 0:
+            c.set_active(0)
+        return c
 
-        self.status = Gtk.Label(xalign=0)
-        self.status.set_line_wrap(True)
-        box.pack_start(self.status, False, False, 0)
+    # Pages
+    def build_welcome(self):
+        card = self.page('welcome', 'welcome_t', 'welcome_s')
+        self.lang_combo = self.field(card, 'language', self.combo(LANGUAGES, 'tr_TR.UTF-8' if self.lang == 'tr' else 'en_US.UTF-8'))
+        self.lang_combo.connect('changed', self.on_lang)
+        self.kb_combo = self.field(card, 'keyboard', self.combo(LAYOUTS, 'tr' if self.lang == 'tr' else 'us'))
 
-        buttons = Gtk.Box(spacing=12)
-        later = Gtk.Button(label='Later')
-        later.connect('clicked', lambda *_: self.destroy())
-        self.apply_btn = Gtk.Button(label='Apply and restart')
-        self.apply_btn.get_style_context().add_class('suggested-action')
-        self.apply_btn.connect('clicked', self.on_apply)
-        buttons.pack_end(self.apply_btn, False, False, 0)
-        buttons.pack_end(later, False, False, 0)
-        box.pack_start(buttons, False, False, 8)
+    def build_account(self):
+        card = self.page('account', 'account_t', 'account_s')
+        self.fullname = self.field(card, 'fullname', Gtk.Entry())
+        self.texts.append((self.fullname.set_placeholder_text, 'fullname_ph'))
+        self.fullname.connect('changed', self.on_fullname)
+        self.username = self.field(card, 'username', Gtk.Entry(text=os.environ.get('USER', 'alarm')))
+        self.username.connect('changed', lambda *_: setattr(self, 'username_edited', self.username.has_focus() or self.username_edited))
+        self.password = self.field(card, 'password', Gtk.Entry(visibility=False, input_purpose=Gtk.InputPurpose.PASSWORD))
+        bar = Gtk.Box(spacing=12)
+        self.level = Gtk.LevelBar(min_value=0, max_value=4, mode=Gtk.LevelBarMode.DISCRETE)
+        self.level.add_offset_value('low', 1)
+        self.level.add_offset_value('high', 3)
+        self.level.add_offset_value('full', 4)
+        self.level.set_hexpand(True)
+        self.level.set_valign(Gtk.Align.CENTER)
+        self.level_text = Gtk.Label(xalign=1)
+        self.level_text.get_style_context().add_class('strength')
+        self.level_text.set_size_request(90, -1)
+        bar.pack_start(self.level, True, True, 0)
+        bar.pack_start(self.level_text, False, False, 0)
+        card.pack_start(bar, False, False, 4)
+        self.password.connect('changed', self.on_password)
+        self.password2 = self.field(card, 'password2', Gtk.Entry(visibility=False, input_purpose=Gtk.InputPurpose.PASSWORD))
 
-        self.sudo_password = DEFAULT_PASSWORD
+    def build_tablet(self):
+        card = self.page('tablet', 'tablet_t', 'tablet_s')
+        self.hostname = self.field(card, 'hostname', Gtk.Entry(text=read('/etc/hostname', 'gta4l')))
+        region, city = (current_zone().split('/', 1) + ['Istanbul'])[:2]
+        if region not in self.zones:
+            region, city = 'Europe', 'Istanbul'
+        row = Gtk.Box(spacing=16, homogeneous=True)
+        left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        row.pack_start(left, True, True, 0)
+        row.pack_start(right, True, True, 0)
+        card.pack_start(row, False, False, 0)
+        self.region = self.field(left, 'region', self.combo([(r, r.replace('_', ' ')) for r in sorted(self.zones)], region))
+        self.city = self.field(right, 'city', Gtk.ComboBoxText())
+        self.region.connect('changed', lambda *_: self.fill_cities(None))
+        self.fill_cities(city)
 
-    @staticmethod
-    def read(path, default):
-        try:
-            return open(path).read().strip() or default
-        except OSError:
-            return default
+    def fill_cities(self, select):
+        self.city.remove_all()
+        for c in self.zones.get(self.region.get_active_id(), []):
+            self.city.append(c, c.replace('_', ' ').replace('/', ' / '))
+        self.city.set_active_id(select or '')
+        if self.city.get_active() < 0:
+            self.city.set_active(0)
 
-    def error(self, text):
-        self.status.set_text(text)
-        self.status.get_style_context().add_class('error')
+    def build_services(self):
+        card = self.page('services', 'services_t', 'services_s')
+        row = Gtk.Box(spacing=20)
+        txt = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        name = self.label('ssh', 'sumval')
+        desc = self.label('ssh_s', 'subtitle', wrap=True)
+        txt.pack_start(name, False, False, 0)
+        txt.pack_start(desc, False, False, 0)
+        row.pack_start(txt, True, True, 0)
+        self.ssh = Gtk.Switch(active=False, valign=Gtk.Align.CENTER)
+        row.pack_end(self.ssh, False, False, 0)
+        card.pack_start(row, False, False, 6)
+
+    def build_summary(self):
+        card = self.page('summary', 'summary_t', 'summary_s')
+        self.sum_grid = Gtk.Grid(row_spacing=14, column_spacing=32)
+        card.pack_start(self.sum_grid, False, False, 0)
+        self.sum_note = Gtk.Label(xalign=0)
+        self.sum_note.get_style_context().add_class('note')
+        self.sum_note.set_line_wrap(True)
+        self.sum_note.set_margin_top(12)
+        card.pack_start(self.sum_note, False, False, 0)
+
+    def build_working(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18, valign=Gtk.Align.CENTER)
+        self.spinner = Gtk.Spinner()
+        self.spinner.set_size_request(96, 96)
+        self.done_icon = Gtk.Box(halign=Gtk.Align.CENTER)
+        self.done_icon.get_style_context().add_class('checkcircle')
+        self.done_icon.set_size_request(112, 112)
+        mark = Gtk.Label(label='✓', hexpand=True)
+        mark.get_style_context().add_class('checkmark')
+        self.done_icon.pack_start(mark, True, True, 0)
+        self.work_title = Gtk.Label()
+        self.work_title.get_style_context().add_class('title')
+        self.work_sub = Gtk.Label()
+        self.work_sub.get_style_context().add_class('subtitle')
+        self.work_sub.set_line_wrap(True)
+        box.pack_start(self.spinner, False, False, 0)
+        box.pack_start(self.done_icon, False, False, 0)
+        box.pack_start(self.work_title, False, False, 0)
+        box.pack_start(self.work_sub, False, False, 0)
+        self.stack.add_named(box, 'working')
+
+    # Behaviour
+    def retranslate(self):
+        self.set_title(self.tr('window'))
+        for setter, key in self.texts:
+            setter(self.tr(key))
+        self.on_password()
+
+    def on_lang(self, *_):
+        self.lang = 'tr' if self.lang_combo.get_active_id().startswith('tr') else 'en'
+        self.kb_combo.set_active_id('tr' if self.lang == 'tr' else 'us')
+        self.retranslate()
+        self.show_step()
+
+    def on_fullname(self, *_):
+        if self.username_edited:
+            return
+        first = self.fullname.get_text().strip().split(' ')[0].lower()
+        first = first.translate(str.maketrans('çğıöşüâîû', 'cgiosuaiu'))
+        first = re.sub(r'[^a-z0-9_-]', '', first)
+        if first and first[0].isalpha():
+            self.username.set_text(first[:32])
+
+    def on_password(self, *_):
+        pw = self.password.get_text() if hasattr(self, 'password') else ''
+        s = strength(pw) if pw else 0
+        self.level.set_value(s)
+        self.level_text.set_text('' if not pw else self.tr(['weak', 'weak', 'fair', 'good', 'strong'][s]))
+
+    def show_step(self):
+        name = STEPS[self.step]
+        self.stack.set_visible_child_name(name)
+        for i, lab in enumerate(self.step_labels):
+            ctx = lab.get_style_context()
+            for c in ('current', 'done'):
+                ctx.remove_class(c)
+            if i == self.step:
+                ctx.add_class('current')
+            elif i < self.step:
+                ctx.add_class('done')
+            lab.set_text(('✓  ' if i < self.step else '') + self.tr('s_' + STEPS[i]))
+        self.back.set_visible(self.step > 0)
+        last = self.step == len(STEPS) - 1
+        self.texts = [(s, k) for s, k in self.texts if s != self.next.set_label]
+        self.texts.append((self.next.set_label, 'apply' if last else 'next'))
+        self.next.set_label(self.tr('apply' if last else 'next'))
+        if name == 'summary':
+            self.fill_summary()
+
+    def validate(self):
+        name = STEPS[self.step]
+        if name == 'account':
+            user = self.username.get_text().strip()
+            pw, pw2 = self.password.get_text(), self.password2.get_text()
+            if not USER_RE.match(user) or user in ('root', 'fastrpc'):
+                return 'e_user'
+            if not pw:
+                return 'e_pw'
+            if pw != pw2:
+                return 'e_pw2'
+            if pw == DEFAULT_PASSWORD:
+                return 'e_1234'
+        if name == 'tablet' and not HOST_RE.match(self.hostname.get_text().strip()):
+            return 'e_host'
+        return None
+
+    def go(self, delta):
+        self.error.set_text('')
+        if delta > 0:
+            err = self.validate()
+            if err:
+                self.error.set_text(self.tr(err))
+                return
+            if self.step == len(STEPS) - 1:
+                return self.apply()
+        self.step = max(0, min(len(STEPS) - 1, self.step + delta))
+        self.show_step()
+
+    def zone(self):
+        return '%s/%s' % (self.region.get_active_id(), self.city.get_active_id())
+
+    def fill_summary(self):
+        for ch in self.sum_grid.get_children():
+            self.sum_grid.remove(ch)
+        user = self.username.get_text().strip()
+        full = self.fullname.get_text().strip()
+        rows = [
+            ('sum_user', user + (' (%s)' % full if full else '')),
+            ('sum_sudo', self.tr('sum_sudo_v')),
+            ('sum_host', self.hostname.get_text().strip()),
+            ('sum_zone', self.zone().replace('_', ' ')),
+            ('sum_lang', self.lang_combo.get_active_text()),
+            ('sum_kb', self.kb_combo.get_active_text()),
+            ('sum_ssh', self.tr('on') if self.ssh.get_active() else self.tr('off')),
+        ]
+        for i, (k, v) in enumerate(rows):
+            a = Gtk.Label(label=self.tr(k), xalign=0)
+            a.get_style_context().add_class('sumkey')
+            b = Gtk.Label(label=v, xalign=0, ellipsize=Pango.EllipsizeMode.END)
+            b.get_style_context().add_class('sumval')
+            self.sum_grid.attach(a, 0, i, 1, 1)
+            self.sum_grid.attach(b, 1, i, 1, 1)
+        self.sum_grid.show_all()
+        old = os.environ.get('USER', 'alarm')
+        self.sum_note.set_text(self.tr('sum_alarm') if old == 'alarm' and user != 'alarm' else '')
 
     def ask_current_password(self):
-        d = Gtk.Dialog(title='Current password', transient_for=self, modal=True)
-        d.add_buttons('Cancel', Gtk.ResponseType.CANCEL, 'OK', Gtk.ResponseType.OK)
+        d = Gtk.Dialog(title=self.tr('cur_pw_t'), transient_for=self, modal=True)
+        d.add_buttons(self.tr('cancel'), Gtk.ResponseType.CANCEL, self.tr('ok'), Gtk.ResponseType.OK)
         area = d.get_content_area()
-        area.set_spacing(10)
-        area.set_border_width(20)
-        area.add(Gtk.Label(label='Enter the current password of your user:'))
+        area.set_spacing(12)
+        area.set_border_width(24)
+        area.add(Gtk.Label(label=self.tr('cur_pw')))
         e = Gtk.Entry(visibility=False, activates_default=True)
         area.add(e)
         d.set_default_response(Gtk.ResponseType.OK)
@@ -163,29 +554,33 @@ class Setup(Gtk.Window):
         d.destroy()
         return pw if ok else None
 
-    def on_apply(self, *_):
-        user = self.username.get_text().strip()
-        pw, pw2 = self.password.get_text(), self.password2.get_text()
-        host = self.hostname.get_text().strip()
-        if not USER_RE.match(user) or user in ('root', 'fastrpc'):
-            return self.error('User name: lower-case letters, digits, "-" and "_", starting with a letter.')
-        if not pw:
-            return self.error('Choose a password.')
-        if pw != pw2:
-            return self.error('The two passwords are not the same.')
-        if pw == DEFAULT_PASSWORD:
-            return self.error('Choose a password other than 1234.')
-        if not HOST_RE.match(host):
-            return self.error('Tablet name: letters, digits and "-".')
+    def set_working(self, title, sub, spinning, done=False):
+        self.stack.set_visible_child_name('working')
+        self.work_title.set_text(title)
+        self.work_sub.set_text(sub)
+        self.spinner.set_visible(spinning)
+        self.done_icon.set_visible(done)
+        if spinning:
+            self.spinner.start()
+        else:
+            self.spinner.stop()
+
+    def apply(self):
         cfg = {
             'fullname': self.fullname.get_text().strip(),
-            'user': user, 'password': pw, 'hostname': host,
-            'zone': self.zone.get_active_id(), 'lang': self.lang.get_active_id(),
-            'layout': self.layout.get_active_id(), 'ssh': self.ssh.get_active(),
+            'user': self.username.get_text().strip(),
+            'password': self.password.get_text(),
+            'hostname': self.hostname.get_text().strip(),
+            'zone': self.zone(), 'lang': self.lang_combo.get_active_id(),
+            'layout': self.kb_combo.get_active_id(), 'ssh': self.ssh.get_active(),
             'old_user': os.environ.get('USER', 'alarm'),
         }
-        rundir = os.environ.get('XDG_RUNTIME_DIR') or tempfile.gettempdir()
-        while True:
+        for w in (self.back, self.next, self.later):
+            w.set_sensitive(False)
+        self.set_working(self.tr('working_t'), self.tr('working_s'), True)
+
+        def work():
+            rundir = os.environ.get('XDG_RUNTIME_DIR') or tempfile.gettempdir()
             fd, path = tempfile.mkstemp(prefix='gta4l-setup-', suffix='.json', dir=rundir)
             with os.fdopen(fd, 'w') as f:
                 json.dump(cfg, f)
@@ -193,22 +588,37 @@ class Setup(Gtk.Window):
                                input=self.sudo_password + '\n', capture_output=True, text=True)
             if os.path.exists(path):
                 os.remove(path)
-            if r.returncode == 0:
-                break
-            if 'incorrect password' in r.stderr.lower() or 'try again' in r.stderr.lower() \
-                    or 'a password is required' in r.stderr.lower():
-                pw_now = self.ask_current_password()
-                if pw_now is None:
-                    return self.error('Not changed.')
-                self.sudo_password = pw_now
-                continue
-            return self.error('Setup failed: ' + (r.stderr.strip() or r.stdout.strip())[-400:])
-        self.status.get_style_context().remove_class('error')
-        self.status.set_text('Done. Restarting…')
-        self.apply_btn.set_sensitive(False)
-        GLib.timeout_add_seconds(2, lambda: subprocess.run(['systemctl', 'reboot']) and False)
+            GLib.idle_add(self.applied, r)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def applied(self, r):
+        err = (r.stderr or '').lower()
+        if r.returncode != 0 and ('incorrect password' in err or 'try again' in err or 'password is required' in err):
+            pw = self.ask_current_password()
+            if pw is None:
+                self.fail(self.tr('not_changed'))
+                return False
+            self.sudo_password = pw
+            self.apply()
+            return False
+        if r.returncode != 0:
+            self.fail((r.stderr.strip() or r.stdout.strip())[-400:])
+            return False
+        self.set_working(self.tr('done_t'), self.tr('done_s'), False, done=True)
+        GLib.timeout_add_seconds(3, lambda: subprocess.run(['systemctl', 'reboot']) and False)
+        return False
+
+    def fail(self, text):
+        self.set_working(self.tr('fail_t'), text, False)
+        for w in (self.back, self.next, self.later):
+            w.set_sensitive(True)
+        self.step = len(STEPS) - 1
+        self.back.set_visible(True)
 
 
-win = Setup()
-win.show_all()
-Gtk.main()
+if __name__ == '__main__':
+    win = Setup()
+    win.show_all()
+    win.show_step()
+    Gtk.main()
